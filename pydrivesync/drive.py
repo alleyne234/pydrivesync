@@ -174,11 +174,11 @@ def update_existing_files_cache(service, parent_folder_id=None):
         None
     """
     query = f"'{parent_folder_id}' in parents" if parent_folder_id else "'root' in parents"
-    response = service.files().list(q=query, spaces='drive', fields='files(id, name, mimeType)').execute()
+    response = service.files().list(q=query, spaces='drive', fields='files(id, name, mimeType, parents)').execute()
     files = response.get('files', [])
 
     for file in files:
-        existing_files_cache[file['name']] = {'id': file['id'], 'mimeType': file['mimeType']}
+        existing_files_cache[file['name']] = {'id': file['id'], 'mimeType': file['mimeType'], 'parents': file.get('parents', [])}
 
 
 def upload(service, path, destination_parent_id=None):
@@ -221,6 +221,27 @@ def upload(service, path, destination_parent_id=None):
         return None
 
 
+def check_file_exists(service, file_name, destination_parent_id=None):
+    if file_name in existing_files_cache:
+        for parent_id in existing_files_cache[file_name]['parents']:
+            if parent_id == destination_parent_id:
+                print(f"The file '{file_name}' already exists in this location.")
+                return existing_files_cache[file_name]['id']
+    
+    # Vérification directe sur le Drive distant
+    query = f"name='{file_name}' and trashed=false"
+    if destination_parent_id:
+        query += f" and '{destination_parent_id}' in parents"
+    response = service.files().list(q=query, spaces='drive', fields='files(id)').execute()
+    files = response.get('files', [])
+    if files:
+        print(f"The file '{file_name}' already exists in this location.")
+        existing_files_cache[file_name] = {'id': files[0]['id'], 'parents': [destination_parent_id]}
+        return files[0]['id']
+    
+    return None
+
+
 def upload_file(service, file_path, destination_parent_id=None):
     """Upload a file and return its file ID.
 
@@ -237,10 +258,10 @@ def upload_file(service, file_path, destination_parent_id=None):
     """
     try:
         file_name = os.path.basename(file_path)
-        if file_name in existing_files_cache:
-            print(f"The file '{file_name}' already exists in this location.")
-            return existing_files_cache[file_name]['id']
-        
+        existing_file_id = check_file_exists(service, file_name, destination_parent_id)
+        if existing_file_id:
+            return existing_file_id
+
         file_metadata = {"name": file_name}
 
         if destination_parent_id:
@@ -249,7 +270,7 @@ def upload_file(service, file_path, destination_parent_id=None):
         media = MediaFileUpload(file_path)
         file = (
             service.files()
-            .create(body=file_metadata, media_body=media, fields="id")
+            .create(body=file_metadata, media_body=media, fields="id, parents")
             .execute()
         )
         update_existing_files_cache(service, destination_parent_id)
