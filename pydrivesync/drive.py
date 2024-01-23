@@ -157,6 +157,30 @@ def download_folder(service, folder_id, destination):
         return False
 
 
+def update_existing_files_cache(service, parent_folder_id=None):
+    """Updates the cache of existing files and their metadata within the specified Google Drive folder.
+
+    Args:
+        service (googleapiclient.discovery.Resource): Authenticated Drive API service.
+        parent_folder_id (str, optional): ID of the parent folder in Google Drive to fetch files from.
+            Defaults to None, which fetches files from the root folder.
+
+    Note:
+        This function retrieves the list of files and their metadata from the specified folder in Google Drive
+        and updates the existing cache. The cache holds information about existing files to facilitate quick
+        checks for file existence during file operations.
+
+    Returns:
+        None
+    """
+    query = f"'{parent_folder_id}' in parents" if parent_folder_id else "'root' in parents"
+    response = service.files().list(q=query, spaces='drive', fields='files(id, name, mimeType)').execute()
+    files = response.get('files', [])
+
+    for file in files:
+        existing_files_cache[file['name']] = {'id': file['id'], 'mimeType': file['mimeType']}
+
+
 def upload(service, path, destination_parent_id=None):
     """Uploads a file or folder to Google Drive.
 
@@ -213,27 +237,23 @@ def upload_file(service, file_path, destination_parent_id=None):
     """
     try:
         file_name = os.path.basename(file_path)
+        if file_name in existing_files_cache:
+            print(f"The file '{file_name}' already exists in this location.")
+            return existing_files_cache[file_name]['id']
+        
         file_metadata = {"name": file_name}
 
         if destination_parent_id:
             file_metadata["parents"] = [destination_parent_id]
 
-        existing_files = search_items(service, destination_parent_id)
-        existing_files_info = {
-            file.get('name'): file.get('id') for file in existing_files
-        }
-
-        if file_name in existing_files_info:
-            print(f"The file '{file_name}' already exists in this location.")
-            return existing_files_info[file_name]
-        else:
-            media = MediaFileUpload(file_path)
-            file = (
-                service.files()
-                .create(body=file_metadata, media_body=media, fields="id")
-                .execute()
-            )
-            return file.get("id")
+        media = MediaFileUpload(file_path)
+        file = (
+            service.files()
+            .create(body=file_metadata, media_body=media, fields="id")
+            .execute()
+        )
+        update_existing_files_cache(service, destination_parent_id)
+        return file.get("id")
 
     except HttpError as error:
         print(f"An HTTP error occurred: {error}")
