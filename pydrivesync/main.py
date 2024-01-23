@@ -208,24 +208,26 @@ def main():
               """)
         choice = input("Enter a choice: ")
         
-        if choice == '1':
-            create_folder_option(service)
-        elif choice == '2':
-            display_tree_option(service)
-        elif choice == '3':
-            display_drive_items_option(service)
-        elif choice == '4':
-            download_option(service)
-        elif choice == '5':
-            upload_option(service)
-        elif choice == '6':
-            process_instructions(service)
-        elif choice == '0':
-            input("Press any key to continue...")
-            os.system('cls')
-            exit()
-        else:
-            input("Not a valid choice, press any key to continue.")
+        match choice:
+            case '1':
+                create_folder_option(service)
+            case '2':
+                display_tree_option(service)
+            case '3':
+                display_drive_items_option(service)
+            case '4':
+                download_option(service)
+            case '5':
+                upload_option(service)
+            case '6':
+                process_instructions(service)
+            case '0':
+                input("Press any key to continue...")
+                os.system('cls')
+                exit()
+            case _:
+                input("Not a valid choice, press any key to continue.")
+
     
 if __name__ == '__main__':
     main()
